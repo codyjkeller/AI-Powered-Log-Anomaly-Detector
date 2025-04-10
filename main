@@ -1,0 +1,64 @@
+import pandas as pd
+from collections import defaultdict
+
+class LogAnomalyDetector:
+    def __init__(self, threshold=2):
+        """
+        Initializes the LogAnomalyDetector with a threshold for anomaly detection.
+        """
+        self.log_counts = defaultdict(int)
+        self.threshold = threshold
+
+    def train(self, log_data):
+        """
+        Trains the detector by counting the occurrences of different log entries.
+        Assumes log_data is a list of strings.
+        """
+        for log_entry in log_data:
+            self.log_counts[log_entry] += 1
+
+    def predict(self, new_log_entry):
+        """
+        Predicts if a new log entry is anomalous based on its frequency in the training data.
+        """
+        mean_frequency = sum(self.log_counts.values()) / len(self.log_counts) if self.log_counts else 0
+        std_dev = pd.Series(self.log_counts.values()).std() if self.log_counts else 0
+
+        if mean_frequency == 0 and std_dev == 0:
+            return True  # First log entry is considered anomalous initially
+
+        frequency = self.log_counts.get(new_log_entry, 0)
+        z_score = abs(frequency - mean_frequency) / (std_dev + 1e-9) # Adding a small epsilon to avoid division by zero
+
+        return z_score > self.threshold
+
+# --- Example Usage ---
+if __name__ == "__main__":
+    training_logs = [
+        "GET /index.html 200",
+        "POST /login 200",
+        "GET /css/style.css 200",
+        "GET /js/script.js 200",
+        "POST /login 200",
+        "GET /index.html 200",
+        "GET /api/data 200",
+        "GET /index.html 200",
+    ]
+
+    detector = LogAnomalyDetector(threshold=1.5)
+    detector.train(training_logs)
+
+    new_logs_to_test = [
+        "GET /admin.php 404",
+        "POST /login 200",
+        "GET /index.html 200",
+        "DELETE /users/123 403",
+        "GET /../../../../etc/passwd 404",
+    ]
+
+    print("Anomaly Detection Results:")
+    for log in new_logs_to_test:
+        if detector.predict(log):
+            print(f"'{log}' is potentially anomalous.")
+        else:
+            print(f"'{log}' appears normal.")
